@@ -1,0 +1,5 @@
+{
+  "build": ["dotnet build PipeCensus/PipeCensus.csproj -v q -p:ModInstallPath=F:/_System/Documents/Klei/OxygenNotIncluded/mods/local/PipeCensus"],
+  "required_mods": ["PipeCensus.Local"],
+  "save": "05 all research.sav"
+}

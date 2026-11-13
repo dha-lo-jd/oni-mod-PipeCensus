@@ -1,0 +1,116 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PO Editor\n"
+"Application: Oxygen Not IncludedPOT Version: 2.0\n"
+"Language: ja_JP\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+
+msgctxt "PipeCensus.STRINGS.UI.TOOL_NAME"
+msgid "Pipe Census"
+msgstr "配管調査"
+
+msgctxt "PipeCensus.STRINGS.UI.TOOL_TOOLTIP"
+msgid "Drag to summarize the contents of the pipes in an area"
+msgstr "ドラッグした範囲内の配管の中身を集計します"
+
+msgctxt "PipeCensus.STRINGS.UI.TITLE"
+msgid "Pipe Census"
+msgstr "配管調査"
+
+msgctxt "PipeCensus.STRINGS.UI.EMPTY"
+msgid "No pipes in the selected area."
+msgstr "選択範囲内に配管がありません。"
+
+msgctxt "PipeCensus.STRINGS.UI.FILTERS.KIND"
+msgid "Pipe"
+msgstr "配管"
+
+msgctxt "PipeCensus.STRINGS.UI.FILTERS.CONTENT"
+msgid "Contents"
+msgstr "内容物"
+
+msgctxt "PipeCensus.STRINGS.UI.FILTERS.ALL"
+msgid "All"
+msgstr "すべて"
+
+msgctxt "PipeCensus.STRINGS.UI.KINDS.LIQUID"
+msgid "Liquid"
+msgstr "液体"
+
+msgctxt "PipeCensus.STRINGS.UI.KINDS.GAS"
+msgid "Gas"
+msgstr "気体"
+
+msgctxt "PipeCensus.STRINGS.UI.KINDS.SOLID"
+msgid "Solid"
+msgstr "固体"
+
+msgctxt "PipeCensus.STRINGS.UI.COLUMNS.KIND"
+msgid "Pipe"
+msgstr "種類"
+
+msgctxt "PipeCensus.STRINGS.UI.COLUMNS.CONTENT"
+msgid "Contents"
+msgstr "内容物"
+
+msgctxt "PipeCensus.STRINGS.UI.COLUMNS.MASS"
+msgid "Mass"
+msgstr "質量"
+
+msgctxt "PipeCensus.STRINGS.UI.COLUMNS.SEGMENTS"
+msgid "Segments"
+msgstr "区画"
+
+msgctxt "PipeCensus.STRINGS.UI.COLUMNS.FILL"
+msgid "Filled"
+msgstr "満たされ具合"
+
+msgctxt "PipeCensus.STRINGS.UI.COLUMNS.TEMPERATURE"
+msgid "Temperature"
+msgstr "温度"
+
+msgctxt "PipeCensus.STRINGS.UI.COLUMNS.GERMS"
+msgid "Germs"
+msgstr "細菌"
+
+msgctxt "PipeCensus.STRINGS.UI.COLUMNS.NETWORKS"
+msgid "Networks"
+msgstr "ネットワーク"
+
+msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.SEGMENTS"
+msgid "Pipe tiles holding this"
+msgstr "これが入っている配管の区画の数"
+
+msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.FILL"
+msgid "Mass divided by what these tiles can hold ({0})"
+msgstr "質量 ÷ これらの区画に入る量（{0}）"
+
+msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.NETWORKS"
+msgid "Separate pipe networks these tiles belong to"
+msgstr "これらの区画が属する、つながっていない配管ネットワークの数"
+
+msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.GERMS"
+msgid "{0}"
+msgstr "{0}"
+
+msgctxt "PipeCensus.STRINGS.UI.FORMATS.EMPTY_CONTENT"
+msgid "Empty"
+msgstr "空の区画"
+
+msgctxt "PipeCensus.STRINGS.UI.FORMATS.RANGE"
+msgid "{0} - {1}"
+msgstr "{0} ～ {1}"
+
+msgctxt "PipeCensus.STRINGS.UI.FORMATS.GERMS"
+msgid "{0}
+{1}"
+msgstr "{0}
+{1}"
+
