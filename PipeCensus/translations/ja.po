@@ -80,10 +80,6 @@ msgctxt "PipeCensus.STRINGS.UI.COLUMNS.GERMS"
 msgid "Germs"
 msgstr "細菌"
 
-msgctxt "PipeCensus.STRINGS.UI.COLUMNS.NETWORKS"
-msgid "Networks"
-msgstr "ネットワーク"
-
 msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.SEGMENTS"
 msgid "Pipe tiles holding this"
 msgstr "これが入っている配管の区画の数"
@@ -92,13 +88,25 @@ msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.FILL"
 msgid "Mass divided by what these tiles can hold ({0})"
 msgstr "質量 ÷ これらの区画に入る量（{0}）"
 
-msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.NETWORKS"
-msgid "Separate pipe networks these tiles belong to"
-msgstr "これらの区画が属する、つながっていない配管ネットワークの数"
+msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.EXPAND"
+msgid "Click the + to list the pipe tiles"
+msgstr "+ を押すと、配管の区画ごとの内訳を表示します"
+
+msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.TILE_SCROLL"
+msgid "More tiles below: scroll the list"
+msgstr "続きがあります。ホイールで送れます"
 
 msgctxt "PipeCensus.STRINGS.UI.TOOLTIPS.GERMS"
 msgid "{0}"
 msgstr "{0}"
+
+msgctxt "PipeCensus.STRINGS.UI.FORMATS.NETWORK_ROW"
+msgid "{0} (network {1})"
+msgstr "{0}（ネットワーク {1}）"
+
+msgctxt "PipeCensus.STRINGS.UI.FORMATS.TILE"
+msgid "Tile {0}, {1}"
+msgstr "区画 {0}, {1}"
 
 msgctxt "PipeCensus.STRINGS.UI.FORMATS.EMPTY_CONTENT"
 msgid "Empty"

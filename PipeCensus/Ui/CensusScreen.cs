@@ -2,12 +2,14 @@ using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace PipeCensus;
 
 // Full-screen modal summarizing the pipes found in the selected area, laid out like the skills screen: filters in the
-// left pane, the list in the right pane. One row is one kind of pipe holding one thing. The list is a snapshot taken when
+// left pane, the list in the right pane. One row is one kind of pipe holding one thing in one pipe network; a row opens
+// into its pipe tiles. The list is a snapshot taken when
 // the screen opens; filters only narrow what is shown. It has its own root canvas set up like the skills screen's.
 public sealed class CensusScreen : KModalScreen
 {
@@ -20,6 +22,13 @@ public sealed class CensusScreen : KModalScreen
     private const float IconSize = 38f;
     private const float HeaderHeight = 24f;
     private const float BoxSize = 16f;
+    private const float ExpanderSize = 20f;
+    private const float TileRowHeight = 30f;
+    private const float TileIndent = 30f;
+    private const float Spacing = 2f;
+
+    // More tiles than this scroll inside their own window.
+    internal const int MaxTileRows = 20;
 
     // The management menu buttons sit over the top of the right pane.
     private const float TopReserved = 68f;
@@ -40,14 +49,13 @@ public sealed class CensusScreen : KModalScreen
     private const int FillColumn = 4;
     private const int TemperatureColumn = 5;
     private const int GermsColumn = 6;
-    private const int NetworksColumn = 7;
 
-    private static readonly float[] ColumnX = { 8f, 90f, 390f, 520f, 610f, 790f, 930f, 1130f };
+    private static readonly float[] ColumnX = { 8f, 90f, 440f, 570f, 660f, 840f, 980f };
     private static readonly PipeKind[] AllKinds = { PipeKind.Liquid, PipeKind.Gas, PipeKind.Solid };
     private static string[] ColumnNames => new string[]
     {
         STRINGS.UI.COLUMNS.KIND, STRINGS.UI.COLUMNS.CONTENT, STRINGS.UI.COLUMNS.MASS, STRINGS.UI.COLUMNS.SEGMENTS,
-        STRINGS.UI.COLUMNS.FILL, STRINGS.UI.COLUMNS.TEMPERATURE, STRINGS.UI.COLUMNS.GERMS, STRINGS.UI.COLUMNS.NETWORKS,
+        STRINGS.UI.COLUMNS.FILL, STRINGS.UI.COLUMNS.TEMPERATURE, STRINGS.UI.COLUMNS.GERMS,
     };
 
     private static CensusScreen current;
@@ -57,6 +65,8 @@ public sealed class CensusScreen : KModalScreen
     internal int TotalRows => rows.Count;
     internal int ShownRows { get; private set; }
     internal PipeRow Row(int index) => rows[index];
+    internal ScrollRect ListScroll => listScroll;
+    internal bool IsExpanded(PipeRow row) => expanded.Contains(row);
 
     private sealed class ToggleView
     {
@@ -92,6 +102,8 @@ public sealed class CensusScreen : KModalScreen
     private readonly Dictionary<PipeKind, ToggleView> kindToggles = new Dictionary<PipeKind, ToggleView>();
     private readonly Dictionary<string, ToggleView> contentToggles = new Dictionary<string, ToggleView>();
     private ToggleView allToggle;
+    private ScrollRect listScroll;
+    private readonly HashSet<PipeRow> expanded = new HashSet<PipeRow>();
 
     public static void Open(CensusSelection selection)
     {
@@ -103,7 +115,18 @@ public sealed class CensusScreen : KModalScreen
         // Opening this window while another one is up replaces it.
         CloseOtherScreens();
 
-        var rows = PipeCollector.Collect(selection);
+        OpenRows(PipeCollector.Collect(selection));
+    }
+
+    // Opens the window on made-up rows too (the in-game tests).
+    internal static void OpenRows(List<PipeRow> rows)
+    {
+        if (current != null)
+        {
+            current.Close();
+        }
+
+        CloseOtherScreens();
         var skills = ManagementMenu.Instance != null
             ? Traverse.Create(ManagementMenu.Instance).Field("skillsScreen").GetValue<SkillsScreen>()
             : null;
@@ -120,12 +143,24 @@ public sealed class CensusScreen : KModalScreen
 
         var screen = go.AddComponent<CensusScreen>();
         screen.rect = go.GetComponent<RectTransform>();
-        screen.rows = rows.OrderBy(r => (int)r.Kind).ThenBy(r => r.IsEmpty ? 1 : 0).ThenByDescending(r => r.Mass).ToList();
+        screen.rows = Arranged(rows);
         current = screen;
         screen.Activate();
         screen.Show(true);
         Canvas.ForceUpdateCanvases();
         screen.Build();
+    }
+
+    // Per kind, the things with the most mass first, the empty tiles last; the networks of one thing stay together.
+    internal static List<PipeRow> Arranged(List<PipeRow> rows)
+    {
+        var total = rows.GroupBy(r => (int)r.Kind + ":" + r.ContentKey).ToDictionary(g => g.Key, g => g.Sum(r => r.Mass));
+        return rows.OrderBy(r => (int)r.Kind)
+            .ThenBy(r => r.IsEmpty ? 1 : 0)
+            .ThenByDescending(r => total[(int)r.Kind + ":" + r.ContentKey])
+            .ThenBy(r => r.ContentKey, System.StringComparer.Ordinal)
+            .ThenBy(r => r.NetworkNumber)
+            .ToList();
     }
 
     // Same canvas settings and scaler as the skills screen; without a source, a plain overlay canvas.
@@ -302,7 +337,7 @@ public sealed class CensusScreen : KModalScreen
 
         // One toggle per thing actually present in the area (the same name in several kinds of pipe is one toggle).
         AddSection(filters, STRINGS.UI.FILTERS.CONTENT);
-        allToggle = AddToggle(filters, STRINGS.UI.FILTERS.ALL + " (" + rows.Count(r => !r.IsEmpty) + ")", ClearContents);
+        allToggle = AddToggle(filters, STRINGS.UI.FILTERS.ALL + " (" + rows.Where(r => !r.IsEmpty).Select(r => r.ContentKey).Distinct().Count() + ")", ClearContents);
         foreach (var group in rows.Where(r => !r.IsEmpty).GroupBy(r => r.ContentKey).OrderBy(g => g.First().Name, System.StringComparer.CurrentCulture))
         {
             var key = group.Key;
@@ -336,9 +371,23 @@ public sealed class CensusScreen : KModalScreen
         Refresh();
     }
 
-    private static ScrollRect ConfigureScroll(RectTransform viewport, RectTransform content)
+    // Shows or hides the tiles of a row; the list stays where it was.
+    internal void ToggleExpanded(PipeRow row)
     {
-        var scroll = viewport.gameObject.AddComponent<ScrollRect>();
+        if (!expanded.Remove(row))
+        {
+            expanded.Add(row);
+        }
+
+        var offset = content.anchoredPosition.y;
+        Refresh();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+        content.anchoredPosition = new Vector2(content.anchoredPosition.x, offset);
+    }
+
+    private static ScrollRect ConfigureScroll(RectTransform viewport, RectTransform content, bool nested = false)
+    {
+        var scroll = nested ? viewport.gameObject.AddComponent<NestedScrollRect>() : viewport.gameObject.AddComponent<ScrollRect>();
         scroll.viewport = viewport;
         scroll.content = content;
         scroll.horizontal = false;
@@ -481,7 +530,6 @@ public sealed class CensusScreen : KModalScreen
             case FillColumn: return row.Fill < 0f ? (double?)null : row.Fill;
             case TemperatureColumn: return row.Temperature < 0f ? (double?)null : row.Temperature;
             case GermsColumn: return row.IsEmpty ? (double?)null : row.GermTotal;
-            case NetworksColumn: return row.IsEmpty ? (double?)null : row.Networks;
             default: return null;
         }
     }
@@ -497,8 +545,8 @@ public sealed class CensusScreen : KModalScreen
         {
             var named = list.Where(r => !r.IsEmpty);
             var byName = descending
-                ? named.OrderByDescending(r => r.Name, System.StringComparer.CurrentCulture)
-                : named.OrderBy(r => r.Name, System.StringComparer.CurrentCulture);
+                ? named.OrderByDescending(r => r.Name, System.StringComparer.CurrentCulture).ThenByDescending(r => r.NetworkNumber)
+                : named.OrderBy(r => r.Name, System.StringComparer.CurrentCulture).ThenBy(r => r.NetworkNumber);
             return byName.Concat(list.Where(r => r.IsEmpty)).ToList();
         }
 
@@ -535,6 +583,7 @@ public sealed class CensusScreen : KModalScreen
         layout.spacing = 2f;
         content.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
         var scroll = ConfigureScroll(viewport, content);
+        listScroll = scroll;
 
         // Rubber band like the skills and research screens: overscroll springs back, flicks coast.
         scroll.movementType = ScrollRect.MovementType.Elastic;
@@ -566,7 +615,9 @@ public sealed class CensusScreen : KModalScreen
 
         for (var i = content.childCount - 1; i >= 0; i--)
         {
-            Destroy(content.GetChild(i).gameObject);
+            var old = content.GetChild(i).gameObject;
+            old.SetActive(false);
+            Destroy(old);
         }
 
         var shown = Sorted(Filter(rows, kinds, contents), sortColumn, sortDescending);
@@ -606,6 +657,18 @@ public sealed class CensusScreen : KModalScreen
 
         var holder = button.GetComponent<RectTransform>();
         var nameX = ColumnX[ContentColumn];
+        if (row.Tiles.Count > 1)
+        {
+            var open = expanded.Contains(row);
+            var expander = UiFactory.CreateButton(holder, open ? "-" : "+", nameX, (RowHeight - ExpanderSize) / 2f, ExpanderSize, ExpanderSize, () => ToggleExpanded(row));
+            expander.name = "Expander";
+            if (!open)
+            {
+                expander.gameObject.AddComponent<ToolTip>().SetSimpleTooltip(STRINGS.UI.TOOLTIPS.EXPAND);
+            }
+        }
+
+        nameX += ExpanderSize + 4f;
         if (row.Icon != null)
         {
             var icon = UiFactory.CreatePanel("Icon", holder, row.IconColor, nameX, (RowHeight - IconSize) / 2f, IconSize, IconSize);
@@ -617,10 +680,10 @@ public sealed class CensusScreen : KModalScreen
         nameX += IconSize + 6f;
         Color? dim = row.IsEmpty ? DimColor : (Color?)null;
         Cell(holder, KindColumn, KindName(row.Kind));
-        Cell(holder, ContentColumn, row.Name, x: nameX, color: dim);
+        Cell(holder, ContentColumn, DisplayName(row), x: nameX, color: dim);
         if (row.IsEmpty)
         {
-            for (var column = MassColumn; column <= NetworksColumn; column++)
+            for (var column = MassColumn; column <= GermsColumn; column++)
             {
                 if (column == SegmentsColumn)
                 {
@@ -632,6 +695,7 @@ public sealed class CensusScreen : KModalScreen
                 }
             }
 
+            AddTiles(row);
             return;
         }
 
@@ -641,7 +705,105 @@ public sealed class CensusScreen : KModalScreen
         Cell(holder, FillColumn, Mathf.RoundToInt(row.Fill * 100f) + "%", string.Format(STRINGS.UI.TOOLTIPS.FILL, GameUtil.GetFormattedMass(capacity)), ratio: row.Fill);
         Cell(holder, TemperatureColumn, TemperatureText(row));
         Cell(holder, GermsColumn, GermsText(row), GermsTooltip(row), color: row.GermTotal > 0 ? GermColor : DimColor);
-        Cell(holder, NetworksColumn, row.Networks.ToString(), STRINGS.UI.TOOLTIPS.NETWORKS);
+        AddTiles(row);
+    }
+
+    private static string DisplayName(PipeRow row) =>
+        row.NetworkNumber > 0 ? string.Format(STRINGS.UI.FORMATS.NETWORK_ROW, row.Name, row.NetworkNumber) : row.Name;
+
+    // The tiles of an open row, indented under it. Up to MaxTileRows they are plain rows of the list; more than that sit
+    // in a window of MaxTileRows rows that scrolls by itself.
+    private void AddTiles(PipeRow row)
+    {
+        if (row.Tiles.Count <= 1 || !expanded.Contains(row))
+        {
+            return;
+        }
+
+        if (row.Tiles.Count <= MaxTileRows)
+        {
+            foreach (var tile in row.Tiles)
+            {
+                AddTileRow(content, row, tile);
+            }
+
+            return;
+        }
+
+        var height = MaxTileRows * TileRowHeight + (MaxTileRows - 1) * Spacing;
+        var viewport = UiFactory.CreateRect("Tiles viewport", content, 0f, 0f, 0f, height);
+        var element = viewport.gameObject.AddComponent<LayoutElement>();
+        element.minHeight = height;
+        element.preferredHeight = height;
+        viewport.gameObject.AddComponent<RectMask2D>();
+        viewport.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.2f);
+
+        var inner = UiFactory.CreateRect("Tiles", viewport, 0f, 0f, 0f, 0f);
+        inner.anchorMin = new Vector2(0f, 1f);
+        inner.anchorMax = new Vector2(1f, 1f);
+        inner.pivot = new Vector2(0.5f, 1f);
+        inner.offsetMin = Vector2.zero;
+        inner.offsetMax = Vector2.zero;
+        var layout = inner.gameObject.AddComponent<VerticalLayoutGroup>();
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+        layout.spacing = Spacing;
+        inner.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        var scroll = ConfigureScroll(viewport, inner, nested: true);
+        scroll.inertia = false;
+
+        foreach (var tile in row.Tiles)
+        {
+            AddTileRow(inner, row, tile);
+        }
+
+        // A thin bar at the right edge shows there is more and where the window is.
+        var track = UiFactory.CreatePanel("Scroll track", viewport, ProgressTrackColor, 0f, 0f, 4f, height);
+        track.raycastTarget = false;
+        track.rectTransform.anchorMin = new Vector2(1f, 1f);
+        track.rectTransform.anchorMax = new Vector2(1f, 1f);
+        track.rectTransform.pivot = new Vector2(1f, 1f);
+        track.rectTransform.anchoredPosition = new Vector2(-2f, 0f);
+        var thumbHeight = Mathf.Max(16f, height * MaxTileRows / (float)row.Tiles.Count);
+        var thumb = UiFactory.CreatePanel("Scroll thumb", viewport, DimColor, 0f, 0f, 4f, thumbHeight);
+        thumb.raycastTarget = false;
+        thumb.rectTransform.anchorMin = new Vector2(1f, 1f);
+        thumb.rectTransform.anchorMax = new Vector2(1f, 1f);
+        thumb.rectTransform.pivot = new Vector2(1f, 1f);
+        thumb.rectTransform.sizeDelta = new Vector2(4f, thumbHeight);
+        thumb.rectTransform.anchoredPosition = new Vector2(-2f, 0f);
+        scroll.onValueChanged.AddListener(_ =>
+            thumb.rectTransform.anchoredPosition = new Vector2(-2f, -(1f - scroll.verticalNormalizedPosition) * (height - thumbHeight)));
+        viewport.gameObject.AddComponent<ToolTip>().SetSimpleTooltip(STRINGS.UI.TOOLTIPS.TILE_SCROLL);
+    }
+
+    private void AddTileRow(RectTransform parent, PipeRow row, PipeTile tile)
+    {
+        var button = UiFactory.CreateButton(parent, "", 0f, 0f, 0f, TileRowHeight, () => Pick(tile.Target));
+        button.name = "TileRow";
+        button.gameObject.AddComponent<LayoutElement>().minHeight = TileRowHeight;
+        button.GetComponent<Image>().color = EmptyRowColor;
+        var holder = button.GetComponent<RectTransform>();
+        Grid.CellToXY(tile.Cell, out var x, out var y);
+        var nameX = ColumnX[ContentColumn] + TileIndent;
+        Color? dim = tile.IsEmpty ? DimColor : (Color?)null;
+        Cell(holder, ContentColumn, string.Format(STRINGS.UI.FORMATS.TILE, x, y), x: nameX, color: dim, rowHeight: TileRowHeight);
+        if (tile.IsEmpty)
+        {
+            return;
+        }
+
+        Cell(holder, MassColumn, GameUtil.GetFormattedMass(tile.Mass), rowHeight: TileRowHeight);
+        var capacity = PipeCollector.Capacity(row.Kind);
+        Cell(holder, FillColumn, Mathf.RoundToInt(tile.Fill * 100f) + "%", string.Format(STRINGS.UI.TOOLTIPS.FILL, GameUtil.GetFormattedMass(capacity)), ratio: tile.Fill, rowHeight: TileRowHeight);
+        Cell(holder, TemperatureColumn, GameUtil.GetFormattedTemperature(tile.Temperature), rowHeight: TileRowHeight);
+        var germs = tile.DiseaseCount > 0 && tile.DiseaseIdx != byte.MaxValue;
+        var germText = germs
+            ? GameUtil.GetFormattedDiseaseName(tile.DiseaseIdx) + " " + GameUtil.GetFormattedDiseaseAmount(tile.DiseaseCount)
+            : "-";
+        Cell(holder, GermsColumn, germText, color: germs ? GermColor : DimColor, rowHeight: TileRowHeight);
     }
 
     private static string TemperatureText(PipeRow row)
@@ -670,15 +832,15 @@ public sealed class CensusScreen : KModalScreen
     private static string GermsTooltip(PipeRow row) =>
         row.Germs.Count == 0 ? null : string.Join("\n", row.Germs.OrderByDescending(p => p.Value).Select(p => GameUtil.GetFormattedDisease(p.Key, (int)System.Math.Min(p.Value, int.MaxValue))));
 
-    private static void Cell(RectTransform holder, int column, string text, string tooltip = null, float ratio = -1f, Color? color = null, float x = -1f)
+    private static void Cell(RectTransform holder, int column, string text, string tooltip = null, float ratio = -1f, Color? color = null, float x = -1f, float rowHeight = RowHeight)
     {
         // Progress bar behind the text (growth toward the next harvest).
         if (ratio >= 0f && column + 1 < ColumnX.Length)
         {
             var barWidth = ColumnX[column + 1] - ColumnX[column] - 8f;
-            var track = UiFactory.CreatePanel("Progress track", holder, ProgressTrackColor, ColumnX[column] - 2f, 4f, barWidth, RowHeight - 8f);
+            var track = UiFactory.CreatePanel("Progress track", holder, ProgressTrackColor, ColumnX[column] - 2f, 4f, barWidth, rowHeight - 8f);
             track.raycastTarget = false;
-            var bar = UiFactory.CreatePanel("Progress", holder, ProgressColor, ColumnX[column] - 2f, 4f, barWidth * Mathf.Clamp01(ratio), RowHeight - 8f);
+            var bar = UiFactory.CreatePanel("Progress", holder, ProgressColor, ColumnX[column] - 2f, 4f, barWidth * Mathf.Clamp01(ratio), rowHeight - 8f);
             bar.raycastTarget = false;
         }
 
@@ -691,7 +853,7 @@ public sealed class CensusScreen : KModalScreen
         var width = last ? 700f : ColumnX[column + 1] - x - 4f;
         // Two-line texts (growth, yield) get a taller label; the label centers its lines vertically.
         var height = text != null && text.Contains('\n') ? 40f : 20f;
-        var label = UiFactory.CreateLabel(holder, text, x, (RowHeight - height) / 2f, width, height);
+        var label = UiFactory.CreateLabel(holder, text, x, (rowHeight - height) / 2f, width, height);
         if (color.HasValue)
         {
             label.color = color.Value;
@@ -700,7 +862,7 @@ public sealed class CensusScreen : KModalScreen
         if (!string.IsNullOrEmpty(tooltip))
         {
             // Invisible hover area over the cell; clicks fall through to the row button behind it.
-            var hover = UiFactory.CreatePanel("Hover", holder, new Color(0f, 0f, 0f, 0f), ColumnX[column], 0f, width, RowHeight);
+            var hover = UiFactory.CreatePanel("Hover", holder, new Color(0f, 0f, 0f, 0f), ColumnX[column], 0f, width, rowHeight);
             hover.gameObject.AddComponent<ToolTip>().SetSimpleTooltip(tooltip);
         }
     }
@@ -716,21 +878,23 @@ public sealed class CensusScreen : KModalScreen
     }
 
     // Closes the modal and shows the clicked pipe.
-    private void Pick(PipeRow row)
+    private void Pick(PipeRow row) => Pick(row.Target);
+
+    private void Pick(GameObject target)
     {
         Close();
-        if (row.Target == null || SelectTool.Instance == null)
+        if (target == null || SelectTool.Instance == null)
         {
             return;
         }
 
-        var selectable = row.Target.GetComponent<KSelectable>();
+        var selectable = target.GetComponent<KSelectable>();
         if (selectable == null)
         {
             return;
         }
 
         SelectTool.Instance.Activate();
-        SelectTool.Instance.SelectAndFocus(row.Target.transform.GetPosition(), selectable);
+        SelectTool.Instance.SelectAndFocus(target.transform.GetPosition(), selectable);
     }
 }

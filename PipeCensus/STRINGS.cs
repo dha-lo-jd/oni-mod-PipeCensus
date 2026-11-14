@@ -33,14 +33,14 @@ public static class STRINGS
             public static LocString FILL = "Filled";
             public static LocString TEMPERATURE = "Temperature";
             public static LocString GERMS = "Germs";
-            public static LocString NETWORKS = "Networks";
         }
 
         public static class TOOLTIPS
         {
             public static LocString SEGMENTS = "Pipe tiles holding this";
             public static LocString FILL = "Mass divided by what these tiles can hold ({0})";
-            public static LocString NETWORKS = "Separate pipe networks these tiles belong to";
+            public static LocString EXPAND = "Click the + to list the pipe tiles";
+            public static LocString TILE_SCROLL = "More tiles below: scroll the list";
 
             // {0}: the germ list, one per line
             public static LocString GERMS = "{0}";
@@ -52,6 +52,12 @@ public static class STRINGS
 
             // Temperature range. {0}: lowest, {1}: highest
             public static LocString RANGE = "{0} - {1}";
+
+            // A row of one network when the same content is in several. {0}: the content, {1}: the network number
+            public static LocString NETWORK_ROW = "{0} (network {1})";
+
+            // A pipe tile under a row. {0}: x, {1}: y
+            public static LocString TILE = "Tile {0}, {1}";
 
             // Germs of a row. {0}: germ name, {1}: amount
             public static LocString GERMS = "{0}\n{1}";

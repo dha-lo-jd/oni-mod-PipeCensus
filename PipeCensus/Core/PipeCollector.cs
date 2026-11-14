@@ -22,7 +22,6 @@ public static class PipeCollector
     {
         public PipeRow Row;
         public double WeightedTemperature;
-        public readonly HashSet<int> Networks = new HashSet<int>();
     }
 
     // The content of a tile as read from the flow manager.
@@ -53,7 +52,8 @@ public static class PipeCollector
                 }
 
                 var content = Read(kind, cell);
-                var key = (int)kind + ":" + (content.IsEmpty ? "" : content.Key);
+                var network = NetworkId(kind, cell);
+                var key = (int)kind + ":" + (content.IsEmpty ? "" : content.Key) + ":" + network;
                 if (!sums.TryGetValue(key, out var sum))
                 {
                     sum = new Sum
@@ -66,6 +66,7 @@ public static class PipeCollector
                             Name = content.IsEmpty ? STRINGS.UI.FORMATS.EMPTY_CONTENT.text : content.Name,
                             Icon = content.Icon,
                             IconColor = content.IconColor,
+                            Network = network,
                         },
                     };
                     sums[key] = sum;
@@ -73,13 +74,19 @@ public static class PipeCollector
 
                 var row = sum.Row;
                 row.Segments++;
-                var network = NetworkId(kind, cell);
-                if (network >= 0)
-                {
-                    sum.Networks.Add(network);
-                }
-
                 var tile = TileObject(kind, cell);
+                var pipeTile = new PipeTile
+                {
+                    Cell = cell,
+                    IsEmpty = content.IsEmpty,
+                    Mass = content.IsEmpty ? 0f : content.Mass,
+                    Fill = content.IsEmpty ? -1f : Mathf.Clamp01(content.Mass / Capacity(kind)),
+                    Temperature = content.IsEmpty ? -1f : content.Temperature,
+                    DiseaseIdx = content.DiseaseIdx,
+                    DiseaseCount = content.DiseaseCount,
+                    Target = tile,
+                };
+                row.Tiles.Add(pipeTile);
                 if (content.IsEmpty)
                 {
                     if (row.Target == null)
@@ -112,7 +119,7 @@ public static class PipeCollector
         foreach (var sum in sums.Values)
         {
             var row = sum.Row;
-            row.Networks = sum.Networks.Count;
+            row.Tiles.Sort((a, b) => b.Mass.CompareTo(a.Mass));
             if (row.IsEmpty)
             {
                 continue;
@@ -122,7 +129,23 @@ public static class PipeCollector
             row.Fill = Mathf.Clamp01(row.Mass / (row.Segments * Capacity(row.Kind)));
         }
 
-        return sums.Values.Select(s => s.Row).ToList();
+        var result = sums.Values.Select(s => s.Row).ToList();
+        NumberNetworks(result);
+        return result;
+    }
+
+    // When the same content (of the same kind of pipe) sits in several networks, tells them apart by number, the one with
+    // the most tiles first. A content in one network only stays unnumbered.
+    internal static void NumberNetworks(List<PipeRow> rows)
+    {
+        foreach (var group in rows.GroupBy(r => (int)r.Kind + ":" + (r.IsEmpty ? "" : r.ContentKey)))
+        {
+            var members = group.OrderByDescending(r => r.Segments).ThenBy(r => r.Network).ToList();
+            for (var i = 0; i < members.Count; i++)
+            {
+                members[i].NetworkNumber = members.Count > 1 ? i + 1 : 0;
+            }
+        }
     }
 
     internal static bool HasPipe(PipeKind kind, int cell)

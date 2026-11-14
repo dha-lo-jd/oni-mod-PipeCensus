@@ -206,6 +206,8 @@ internal static class HarnessTests
         try
         {
             yield return Wait.Ticks(2);
+            scene.ConnectLiquid(3); // one network for the water, the empty tile apart
+            yield return Wait.Ticks(3);
             var liquid = Game.Instance.liquidConduitFlow;
             var germs = Db.Get().Diseases.GetIndex(Db.Get().Diseases.SlimeGerms.id);
             liquid.AddElement(scene.Liquid[0], SimHashes.Water, 5f, 300f, byte.MaxValue, 0);
@@ -221,7 +223,11 @@ internal static class HarnessTests
             Check.True(Mathf.Abs(water.Temperature - (5f * 300f + 3f * 310f) / 8f) < 0.1f, "mass-weighted temperature is " + water.Temperature);
             Check.True(Mathf.Abs(water.MinTemperature - 300f) < 0.1f && Mathf.Abs(water.MaxTemperature - 310f) < 0.1f, "temperature range is " + water.MinTemperature + " - " + water.MaxTemperature);
             Check.Equal(4000L, water.GermTotal, "germs in the water");
-            Check.True(water.Networks >= 1 && water.Networks <= 2, "networks of the water tiles: " + water.Networks);
+            Check.Equal(0, water.NetworkNumber, "the water is in one network, so it is not numbered");
+            Check.Equal(2, water.Tiles.Count, "tiles listed under the water");
+            Check.True(water.Tiles[0].Cell == scene.Liquid[0] && water.Tiles[1].Cell == scene.Liquid[1], "tiles are listed with the most water first");
+            Check.True(Mathf.Abs(water.Tiles[0].Mass - 5f) < 0.01f && Mathf.Abs(water.Tiles[0].Fill - 0.5f) < 0.01f, "first tile holds " + water.Tiles[0].Mass);
+            Check.Equal(4000, water.Tiles[1].DiseaseCount, "germs of the second tile");
             Check.True(!string.IsNullOrEmpty(water.Name) && !water.Name.Contains("<"), "water name is '" + water.Name + "'");
             Check.NotNull(water.Icon, "water icon");
             Check.True(water.Target == Grid.Objects[scene.Liquid[0], (int)ObjectLayer.LiquidConduit], "the row selects the tile with the most water");
@@ -269,7 +275,11 @@ internal static class HarnessTests
             Check.True(PipeNetworks.NetworkAt(PipeKind.Gas, scene.Liquid[0]) == null, "no gas network at a liquid pipe");
 
             var rows = PipeCollector.Collect(CensusSelection.FromCells(scene.Liquid));
-            Check.Equal(2, rows.Where(r => r.IsEmpty).Sum(r => r.Networks), "networks counted over four liquid tiles (3 joined + 1)");
+            var empties = rows.Where(r => r.IsEmpty).OrderBy(r => r.NetworkNumber).ToList();
+            Check.Equal(2, empties.Count, "the empty tiles split into the joined three and the one apart");
+            Check.True(empties[0].Segments == 3 && empties[0].NetworkNumber == 1, "the larger network is number 1");
+            Check.True(empties[1].Segments == 1 && empties[1].NetworkNumber == 2, "the smaller network is number 2");
+            Check.True(empties[0].Network != empties[1].Network, "different networks");
             Check.NoLogErrors();
         }
         finally
@@ -374,6 +384,8 @@ internal static class HarnessTests
         try
         {
             yield return Wait.Ticks(2);
+            scene.ConnectLiquid(3);
+            yield return Wait.Ticks(3);
             Game.Instance.liquidConduitFlow.AddElement(scene.Liquid[1], SimHashes.Water, 6f, 300f, byte.MaxValue, 0);
 
             Play.ClickToolButton(CensusTool.ToolName);
@@ -384,9 +396,9 @@ internal static class HarnessTests
             yield return null;
             var screen = CensusScreen.Current;
             Check.NotNull(screen, "dragging the census tool over the pipes did not open the window");
-            Check.Equal(2, screen.TotalRows, "rows for the dragged liquid pipes (water and the empty tiles)");
+            Check.Equal(3, screen.TotalRows, "rows for the dragged liquid pipes (water, the empty tiles of its network, the empty tile apart)");
             var rowButtons = Play.FindUi("Row", screen);
-            Check.Equal(2, rowButtons.Count, "row buttons on screen");
+            Check.Equal(3, rowButtons.Count, "row buttons on screen");
 
             Play.ClickUi(rowButtons[0]);
             yield return null;
@@ -446,6 +458,155 @@ internal static class HarnessTests
         }
     }
 
+    // The same content in several networks is told apart by number, the network with the most tiles first.
+    [HarnessTest(Name = "pipecensus.network_numbering", Tags = "pipecensus", RequiresGame = false)]
+    public static void NetworkNumbering()
+    {
+        var rows = new List<PipeRow>
+        {
+            new PipeRow { Kind = PipeKind.Liquid, ContentKey = "Water", Name = "Water", Segments = 2, Network = 7 },
+            new PipeRow { Kind = PipeKind.Liquid, ContentKey = "Water", Name = "Water", Segments = 5, Network = 9 },
+            new PipeRow { Kind = PipeKind.Liquid, ContentKey = "Water", Name = "Water", Segments = 5, Network = 8 },
+            new PipeRow { Kind = PipeKind.Liquid, ContentKey = "Oil", Name = "Oil", Segments = 1, Network = 7 },
+            new PipeRow { Kind = PipeKind.Gas, ContentKey = "Water", Name = "Steam", Segments = 3, Network = 7 },
+        };
+        PipeCollector.NumberNetworks(rows);
+        Check.Equal(3, rows[0].NetworkNumber, "the smallest water network is last");
+        Check.Equal(2, rows[1].NetworkNumber, "equal sizes go by network id (9 after 8)");
+        Check.Equal(1, rows[2].NetworkNumber, "the first of the largest");
+        Check.Equal(0, rows[3].NetworkNumber, "oil is in one network: no number");
+        Check.Equal(0, rows[4].NetworkNumber, "the same name in another kind of pipe is counted apart");
+    }
+
+    // Made-up rows with tiles: the + opens a row (collapsed at first), up to 20 tiles are plain rows, more sit in a window
+    // of 20 that scrolls by itself and hands the wheel to the list once it is at the end.
+    [HarnessTest(Name = "pipecensus.tree_and_nested_scroll", Tags = "pipecensus", TimeoutSeconds = 120)]
+    public static IEnumerator TreeAndNestedScroll()
+    {
+        var rows = new List<PipeRow>
+        {
+            MadeUpRow("Water", 30, mass: 100f),
+            MadeUpRow("Oil", 3, mass: 50f),
+        };
+        for (var i = 0; i < 12; i++)
+        {
+            rows.Add(MadeUpRow("Filler" + i, 1, mass: 1f));
+        }
+
+        try
+        {
+            CensusScreen.OpenRows(rows);
+            yield return null;
+            var screen = CensusScreen.Current;
+            Check.NotNull(screen, "the window did not open");
+            Check.Equal(2, Play.FindUi("Expander", screen).Count, "only rows with more than one tile have a +");
+            Check.Equal(0, Play.FindUi("TileRow", screen).Count, "tiles are collapsed at first");
+
+            var oil = rows[1];
+            screen.ToggleExpanded(oil);
+            yield return null;
+            Check.True(screen.IsExpanded(oil), "the oil row should be open");
+            Check.Equal(3, Play.FindUi("TileRow", screen).Count, "three tiles under the oil");
+            Check.Equal(0, screen.GetComponentsInChildren<NestedScrollRect>(true).Length, "up to 20 tiles need no window of their own");
+
+            var water = rows[0];
+            screen.ToggleExpanded(water);
+            yield return null;
+            yield return null;
+            var nested = screen.GetComponentsInChildren<NestedScrollRect>(true);
+            Check.Equal(1, nested.Length, "thirty tiles sit in one scrolling window");
+            Check.Equal(33, Play.FindUi("TileRow", screen).Count, "all tiles are built");
+            var window = (RectTransform)nested[0].transform;
+            Check.True(Mathf.Abs(window.rect.height - (CensusScreen.MaxTileRows * 30f + (CensusScreen.MaxTileRows - 1) * 2f)) < 1f, "the window shows 20 rows: " + window.rect.height);
+
+            // Wheel: inside the window it scrolls the window; at its end the list takes over.
+            var outer = screen.ListScroll;
+            var outerBefore = outer.content.anchoredPosition.y;
+            nested[0].verticalNormalizedPosition = 1f;
+            var down = new UnityEngine.EventSystems.PointerEventData(UnityEngine.EventSystems.EventSystem.current) { scrollDelta = new Vector2(0f, -1f) };
+            nested[0].OnScroll(down);
+            Check.True(nested[0].verticalNormalizedPosition < 1f, "scrolling down inside the window moves it");
+            Check.True(Mathf.Abs(outer.content.anchoredPosition.y - outerBefore) < 0.01f, "the list stays while the window can scroll");
+
+            nested[0].verticalNormalizedPosition = 0f;
+            nested[0].OnScroll(down);
+            Check.True(outer.content.anchoredPosition.y > outerBefore + 0.5f, "at the end of the window the wheel scrolls the list: " + outer.content.anchoredPosition.y);
+
+            nested[0].verticalNormalizedPosition = 1f;
+            var listNow = outer.content.anchoredPosition.y;
+            var up = new UnityEngine.EventSystems.PointerEventData(UnityEngine.EventSystems.EventSystem.current) { scrollDelta = new Vector2(0f, 1f) };
+            nested[0].OnScroll(up);
+            Check.True(outer.content.anchoredPosition.y < listNow - 0.5f, "at the top of the window, wheel up scrolls the list up");
+
+            screen.ToggleExpanded(water);
+            yield return null;
+            Check.Equal(3, Play.FindUi("TileRow", screen).Count, "closing the row hides its tiles");
+            Check.NoLogErrors();
+        }
+        finally
+        {
+            if (CensusScreen.Current != null)
+            {
+                CensusScreen.Current.Close();
+            }
+        }
+    }
+
+    private static PipeRow MadeUpRow(string name, int tiles, float mass)
+    {
+        var row = new PipeRow { Kind = PipeKind.Liquid, ContentKey = name, Name = name, Segments = tiles, Mass = mass, Fill = 0.5f, Temperature = 300f, MinTemperature = 300f, MaxTemperature = 300f };
+        for (var i = 0; i < tiles; i++)
+        {
+            row.Tiles.Add(new PipeTile { Cell = Grid.XYToCell(10 + i, 10), Mass = mass / tiles, Fill = 0.5f, Temperature = 300f });
+        }
+
+        return row;
+    }
+
+    // Clicking a tile under a row selects that pipe.
+    [HarnessTest(Name = "pipecensus.tile_row_click", Tags = "pipecensus", TimeoutSeconds = 180)]
+    public static IEnumerator TileRowClick()
+    {
+        var scene = Scene.Create();
+        try
+        {
+            yield return Wait.Ticks(2);
+            scene.ConnectLiquid(3);
+            yield return Wait.Ticks(3);
+            var liquid = Game.Instance.liquidConduitFlow;
+            liquid.AddElement(scene.Liquid[0], SimHashes.Water, 5f, 300f, byte.MaxValue, 0);
+            liquid.AddElement(scene.Liquid[1], SimHashes.Water, 3f, 300f, byte.MaxValue, 0);
+
+            CensusScreen.Open(CensusSelection.FromCells(scene.Liquid));
+            yield return null;
+            var screen = CensusScreen.Current;
+            var water = Enumerable.Range(0, screen.TotalRows).Select(screen.Row).Single(r => !r.IsEmpty);
+            screen.ToggleExpanded(water);
+            yield return null;
+            var tileRows = Play.FindUi("TileRow", screen);
+            Check.Equal(2, tileRows.Count, "tile rows under the water");
+
+            Play.ClickUi(tileRows[1]);
+            yield return null;
+            Check.True(CensusScreen.Current == null, "picking a tile should close the window");
+            var selected = SelectTool.Instance.selected;
+            Check.NotNull(selected, "the clicked tile should be selected");
+            Check.True(selected.gameObject == Grid.Objects[scene.Liquid[1], (int)ObjectLayer.LiquidConduit], "the second tile (3 kg) should be selected");
+            Check.NoLogErrors();
+        }
+        finally
+        {
+            if (CensusScreen.Current != null)
+            {
+                CensusScreen.Current.Close();
+            }
+
+            SelectTool.Instance.Select(null);
+            Play.ClearTool();
+            scene.Dispose();
+        }
+    }
+
     // A scene for looking at the window (see CLAUDE.md): pipes with a mix of contents, left in the game.
     private static Scene demo;
     private static GameObject demoRail;
@@ -483,6 +644,28 @@ internal static class HarnessTests
         Play.Activate(SelectTool.Instance);
         Play.Hover(demo.Liquid[0]);
         return "hovering " + demo.Liquid[0];
+    }
+
+    // Joins three of the demo pipes without the overlay (run before DemoFill, after a short wait).
+    public static string DemoConnect()
+    {
+        demo.ConnectLiquid(3);
+        return "joined";
+    }
+
+    // Opens every row that has tiles under it (run after DemoOpen).
+    public static string DemoExpand()
+    {
+        var screen = CensusScreen.Current;
+        for (var i = 0; i < screen.TotalRows; i++)
+        {
+            if (screen.Row(i).Tiles.Count > 1 && !screen.IsExpanded(screen.Row(i)))
+            {
+                screen.ToggleExpanded(screen.Row(i));
+            }
+        }
+
+        return "expanded";
     }
 
     public static string DemoOpen()

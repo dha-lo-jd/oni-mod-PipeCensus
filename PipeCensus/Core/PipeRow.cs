@@ -10,7 +10,20 @@ public enum PipeKind
     Solid,
 }
 
-// One line of the census: what one kind of pipe holds of one thing in the area, or its empty tiles.
+// One pipe tile under a row (the row's child line).
+public sealed class PipeTile
+{
+    public int Cell;
+    public bool IsEmpty;
+    public float Mass;
+    public float Fill = -1f;
+    public float Temperature = -1f;
+    public byte DiseaseIdx = byte.MaxValue;
+    public int DiseaseCount;
+    public GameObject Target;
+}
+
+// One line of the census: what one kind of pipe holds of one thing in one pipe network of the area, or its empty tiles.
 public sealed class PipeRow
 {
     public PipeKind Kind;
@@ -36,7 +49,14 @@ public sealed class PipeRow
     // Germs by disease index.
     public readonly Dictionary<byte, long> Germs = new Dictionary<byte, long>();
     public long GermTotal;
-    public int Networks;
+
+    // The pipe network (the game's id, -1: none) and, when the same content sits in several networks of the area, its
+    // number among them (1 = the network with the most tiles; 0 = the content is in one network only).
+    public int Network = -1;
+    public int NetworkNumber;
+
+    // Every tile of the row, the one holding the most first.
+    public readonly List<PipeTile> Tiles = new List<PipeTile>();
 
     // The pipe tile holding the most of it (the first one for the empty line), what a click on the row selects.
     public GameObject Target;
