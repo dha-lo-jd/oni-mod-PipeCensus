@@ -1,0 +1,30 @@
+[h1]Pipe Census[/h1]
+
+Sums up [b]what is flowing in your pipes[/b]: liquid, gas and conveyor contents, per kind of pipe and per thing it holds. Drag over an area, or Shift + click a pipe in a pipe overlay to take the census of its whole network, instead of clicking pipes one by one.
+
+It only shows information: nothing in the colony changes.
+
+[h2]Features[/h2]
+[list]
+[*] Adds a [b]Pipe Census[/b] tool next to the Empty Pipe tool. [b]Drag over an area[/b] to summarize its pipes
+[*] Covers [b]liquid pipes, gas pipes and conveyor rails[/b]. One row is one kind of pipe holding one thing (liquid water, gas oxygen, a conveyed item...), plus rows of empty tiles
+[*] When the same thing is in [b]several pipe networks[/b], each network gets its own row, numbered by size (network 1 has the most tiles)
+[*] Each row shows the [b]total mass[/b], how many [b]pipe tiles[/b] hold it, how [b]full[/b] those tiles are, the mass-weighted [b]temperature[/b] (with the range when it varies) and the [b]germs[/b] in it
+[*] Click the [b]+[/b] of a row to list its [b]pipe tiles[/b] (collapsed at first). Past 20 tiles the list scrolls in a window of 20 rows; the mouse wheel moves on to the main list at the end of the window
+[*] In a pipe overlay, [b]Shift + click a pipe[/b] to take the census of its [b]whole network[/b]; hovering a pipe lights up its whole network
+[*] [b]Filter[/b] by kind of pipe and by content, [b]sort[/b] by any column
+[*] [b]Click a row[/b] (or a tile) to close the list and jump to that pipe
+[*] Works with elements and conveyed items added by other mods
+[*] English and Japanese
+[/list]
+
+[h2]Notes[/h2]
+[list]
+[*] Safe to add to or remove from existing saves; nothing is written to the save file.
+[*] The list is a snapshot taken when the window opens; it does not update while open.
+[*] The tool has no hotkey.
+[*] Works together with [b]Critter Census[/b] and [b]Plant Census[/b] (the same series).
+[/list]
+
+[h2]Source[/h2]
+[url=https://github.com/dha-lo-jd/oni-mod-PipeCensus]GitHub[/url] (MIT License)
