@@ -117,8 +117,6 @@ msgid "{0} - {1}"
 msgstr "{0} ～ {1}"
 
 msgctxt "PipeCensus.STRINGS.UI.FORMATS.GERMS"
-msgid "{0}
-{1}"
-msgstr "{0}
-{1}"
+msgid "{0}\n{1}"
+msgstr "{0}\n{1}"
 
