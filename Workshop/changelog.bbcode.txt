@@ -1,5 +1,15 @@
 [h1]Changelog / 更新履歴[/h1]
 
+[h2]1.1.0[/h2]
+[b]English[/b]
+[list]
+[*] Updated for the game's U60 update. This version requires U60 or later.
+[/list]
+[b]日本語[/b]
+[list]
+[*] ゲームの U60 アップデートに対応しました。ゲームの U60 以降が必要です。
+[/list]
+
 [h2]1.0.1[/h2]
 [b]English[/b]
 [list]

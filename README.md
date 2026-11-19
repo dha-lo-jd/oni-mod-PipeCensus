@@ -22,6 +22,10 @@ It only shows information: nothing in the colony changes. The list is a snapshot
 
 English and Japanese are supported. The design is described in [SPEC.md](SPEC.md) (Japanese).
 
+## Requirements
+
+Oxygen Not Included U60 or later (version 1.1.0 and up).
+
 ## Build
 
 Copy `PipeCensus/Local.Build.props.example` to `Local.Build.props`, set the paths, then `dotnet build`.
