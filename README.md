@@ -24,7 +24,7 @@ English and Japanese are supported. The design is described in [SPEC.md](SPEC.md
 
 ## Requirements
 
-Oxygen Not Included U60 or later (version 1.1.0 and up).
+Oxygen Not Included U60 or the previous U59 build (version 1.1.0 and up).
 
 ## Build
 

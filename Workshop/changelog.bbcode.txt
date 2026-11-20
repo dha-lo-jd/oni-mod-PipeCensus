@@ -3,11 +3,11 @@
 [h2]1.1.0[/h2]
 [b]English[/b]
 [list]
-[*] Updated for the game's U60 update. This version requires U60 or later.
+[*] Updated for the game's U60 update. Works on both U60 and the previous U59 build.
 [/list]
 [b]日本語[/b]
 [list]
-[*] ゲームの U60 アップデートに対応しました。ゲームの U60 以降が必要です。
+[*] ゲームの U60 アップデートに対応しました。U60 と、ひとつ前の U59 の両方で動きます。
 [/list]
 
 [h2]1.0.1[/h2]
